@@ -472,37 +472,49 @@ class Lift3dCLIP(nn.Module):
             trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-
-    def forward(self, pts):
+    # ─────────────────────────────────────────────────────────────
+    def forward(
+        self,
+        pts: torch.Tensor,
+        *,                              ### NEW 新增可选关键字参数
+        return_tokens: bool = False,    ### NEW 是否返回 patch‑token 特征
+        return_xyz: bool = False,       ### NEW 是否同时返回 patch 中心坐标
+    ):
         """
-        Forward pass for processing point clouds and generating class tokens.
+        Args
+        ----
+        pts : [B, N, 3] or [N, 3]
+        return_tokens : 若为 True，除 CLS‑token 外再返回 patch‑token 特征
+        return_xyz    : 仅当 return_tokens=True 时有效，附带每个 patch 的 3D 中心
 
-        Args:
-            pts (Tensor): Input tensor of point clouds of shape [B, N, 3] or [N, 3]
-
-        Returns:
-            Tensor: The class token, [B, 768].
+        Returns
+        -------
+        默认            : cls_token                        [B, 768]
+        return_tokens   : (cls_token, patch_feat)          [B, 768], [B, K, 768]
+        return_xyz=True : (cls_token, patch_feat, xyz)     [B, 768], [B, K, 768], [B, K, 3]
         """
         tokens, pos = [], []
 
+        # ---------- 原始 Lift3D‑CLIP 点云分块 & 位置编码 ----------
         if len(pts.shape) == 2:
             pts = pts.unsqueeze(0).float()
         pts = pts[:, :, :3]
         batch_size = pts.shape[0]
         pts_trans = pts.clone().transpose(1, 2).contiguous()
-        center, group_input_tokens = self.patch_embed(pts_trans, pts)
-        group_input_tokens = group_input_tokens.transpose(1, 2)
+        center, group_input_tokens = self.patch_embed(pts_trans, pts)   # center->[B,K,3]
+        group_input_tokens = group_input_tokens.transpose(1, 2)         # ->[B,K,768]
 
         pos_x, pos_y, _ = self.get_pos_2d(center)
-        self.patch_pos_embed_2D = self.pos_embed_2d[:, 1:]
+        self.patch_pos_embed_2D = self.pos_embed_2d[:, 1:]   # 去掉 CLS 的 2D‑PE
 
         interpolated_pos_embed = self.bilinear_interpolation_3d_to_2d(
             pos_x, pos_y, self.patch_pos_embed_2D
         )
         interpolated_pos_embed = interpolated_pos_embed.reshape(
             center.shape[0], -1, center.shape[1], self.trans_dim
-        )
-        interpolated_pos_embed = interpolated_pos_embed.mean(dim=1)
+        ).mean(dim=1)                                         # ->[B,K,768]
+
+        # ---------- 拼接 CLS token ----------
 
         tokens.append(group_input_tokens)
         pos.append(interpolated_pos_embed)
@@ -511,13 +523,22 @@ class Lift3dCLIP(nn.Module):
         tokens.insert(0, cls_tokens)
         pos.insert(0, cls_pos)
 
-        tokens = torch.cat(tokens, dim=1)
-        pos = torch.cat(pos, dim=1)
-
-        x = (tokens + pos).permute(1, 0, 2)
+        x = torch.cat(tokens, dim=1) + torch.cat(pos, dim=1)  # [B,1+K,768]
+        x = x.permute(1, 0, 2)                                # [L,B,C] 供 Transformer
         for _, block in enumerate(self.resblocks):
             x = block(x)
 
         x = x.permute(1, 0, 2)
         x = self.norm(x)
-        return x[:, 0, :]
+
+        cls_token    = x[:, 0, :]      # [B,768]  ─── 一直是第一位
+        patch_tokens = x[:, 1:, :]     ### NEW     # [B,K,768]
+
+        # ---------- 根据 flag 决定返回内容 ----------
+        if not return_tokens:
+            return cls_token
+        elif not return_xyz:
+            return cls_token, patch_tokens
+        else:
+            return cls_token, patch_tokens, center          ### NEW
+
