@@ -477,9 +477,10 @@ class Lift3dCLIP(nn.Module):
         self,
         pts: torch.Tensor,
         *,                              ### NEW 新增可选关键字参数
-        return_tokens: bool = False,    ### NEW 是否返回 patch‑token 特征
-        return_xyz: bool = False,       ### NEW 是否同时返回 patch 中心坐标
+        return_tokens: bool | None = None,    ### NEW 是否返回 patch‑token 特征。默认 None，便于读取 model.default_*
+        return_xyz: bool | None = None,       ### NEW 是否同时返回 patch 中心坐标
     ):
+
         """
         Args
         ----
@@ -493,6 +494,10 @@ class Lift3dCLIP(nn.Module):
         return_tokens   : (cls_token, patch_feat)          [B, 768], [B, K, 768]
         return_xyz=True : (cls_token, patch_feat, xyz)     [B, 768], [B, K, 768], [B, K, 3]
         """
+        if return_tokens is None:
+            return_tokens = getattr(self, "default_return_tokens", False)
+        if return_xyz is None:
+            return_xyz = getattr(self, "default_return_xyz", False)
         tokens, pos = [], []
 
         # ---------- 原始 Lift3D‑CLIP 点云分块 & 位置编码 ----------
@@ -505,10 +510,10 @@ class Lift3dCLIP(nn.Module):
         group_input_tokens = group_input_tokens.transpose(1, 2)         # ->[B,K,768]
 
         pos_x, pos_y, _ = self.get_pos_2d(center)
-        self.patch_pos_embed_2D = self.pos_embed_2d[:, 1:]   # 去掉 CLS 的 2D‑PE
+        patch_pos_embed_2D = self.pos_embed_2d[:, 1:]   # 去掉 CLS 的 2D‑PE
 
         interpolated_pos_embed = self.bilinear_interpolation_3d_to_2d(
-            pos_x, pos_y, self.patch_pos_embed_2D
+            pos_x, pos_y, patch_pos_embed_2D
         )
         interpolated_pos_embed = interpolated_pos_embed.reshape(
             center.shape[0], -1, center.shape[1], self.trans_dim
@@ -540,5 +545,5 @@ class Lift3dCLIP(nn.Module):
         elif not return_xyz:
             return cls_token, patch_tokens
         else:
-            return cls_token, patch_tokens, center          ### NEW
+            return cls_token, patch_tokens, center.clone()          ### NEW
 

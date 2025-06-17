@@ -26,20 +26,44 @@ def set_trainable_params(model):
     return model
 
 
-def lift3d_clip_base():
+# ───── model_loader.py ──────────────────────────────────────────
+def lift3d_clip_base(
+    *,                                   ### NEW 允许 Hydra 传入关键字参数
+    return_tokens: bool = False,         ### NEW
+    return_xyz: bool = False,            ### NEW
+):
+    """
+    Factory function that builds a Lift3d‑CLIP encoder ready for
+    Stage‑2 imitation / RL.  Extra kwargs control the *default* behaviour
+    of its forward() method (see lift3d_clip.py).
+
+    Args
+    ----
+    return_tokens : if True, forward() 默认多返回 patch‑token 特征
+    return_xyz    : 若 True，则再附带 patch 中心坐标
+    """
     current_dir = pathlib.Path(__file__).parent
     yaml_path = os.path.join(current_dir, "model_config/ViT-B-32.yaml")
     config = cfg_from_yaml_file(yaml_path)
+    # 1. 实例化基础 Lift3dCLIP
     model = Lift3dCLIP(config=config.model)
+    # 2. Stage‑1 LoRA 预训练权重合并
     apply_lora(model)  # Stage 1: Apply LoRA for MAE pretraining
 
-    ckpt_path = "ckpt/lift3d_clip_base.pth"
-    ckpt_path = os.path.join(current_dir, ckpt_path)
+    ckpt_path = os.path.join(current_dir, "ckpt/lift3d_clip_base.pth")
     model.load_model_from_ckpt_mae(ckpt_path)
     merge_lora(model)
 
+    # 3. Stage‑2 再插 LoRA，并冻结除指定层 + LoRA 以外的参数
     apply_lora(model)  # Stage 2: Apply LoRA for imitation learning
     set_trainable_params(model)
+
+    # 4. 记录默认返回开关  -------------------------- ### NEW
+    model.default_return_tokens = return_tokens
+    model.default_return_xyz    = return_xyz
+    #   （在 lift3d_clip.py 的 forward() 内部，若调用方
+    #    没有显式传关键字参数，就会读取这两个属性）
+
     return model
 
 
