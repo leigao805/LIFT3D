@@ -1,0 +1,14 @@
+# ----------------- 基础继承 -----------------
+defaults:
+  - agent: token_voxel_grasp            # ★ 新增
+  - loss_cfg: grasp_loss                # ★ 新增
+  - benchmark: rlbench                 
+
+# --------- 可按需要覆盖全局超参 ---------------
+seed: 0
+trainer:
+  max_epochs: 100
+dataloader:
+  batch_size: 8
+optimizer:
+  lr: 1e-4

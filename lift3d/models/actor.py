@@ -208,11 +208,11 @@ class TokenVoxelGraspActor(nn.Module):
     # -----------------------------------------------------------
     def forward(
         self,
+        images=None,
         point_clouds: torch.Tensor,         # (B, N, 3)
         robot_states: torch.Tensor | None = None,
         *,
         texts=None,
-        images=None,
     ):
         """
         目前仅用 point_clouds; 保留其他参数以保持 Actor 接口一致
@@ -245,7 +245,7 @@ class TokenVoxelGraspActor(nn.Module):
         x = (idx % W).int()
         voxel_centers = torch.stack([x, y, z], dim=1).float()  # (B,3)
         # scale back to meters
-        voxel_centers = voxel_centers * self.voxel_size + torch.tensor(
+        voxel_centers = (voxel_centers + 0.5) * self.voxel_size + torch.tensor(
             self.pc_range[:3], device=voxel_centers.device
         )
 
