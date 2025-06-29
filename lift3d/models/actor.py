@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+# lift3d/models/actor.py  (新增部分类)
+# ---------------------------------------------------------------
+
 import abc
 from typing import List
 
@@ -11,9 +16,6 @@ from lift3d.models.mlp.batchnorm_mlp import BatchNormMLP
 from lift3d.models.mlp.mlp import MLP
 
 
-# lift3d/models/actor.py  (新增部分类)
-# ---------------------------------------------------------------
-from __future__ import annotations
 import torch.nn.functional as F
 from typing import Dict, Tuple
 
