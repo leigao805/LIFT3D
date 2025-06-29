@@ -208,11 +208,10 @@ class TokenVoxelGraspActor(Actor):
     # -----------------------------------------------------------
     def forward(
         self,
-        images=None,
+        images,
         point_clouds: torch.Tensor,         # (B, N, 3)
-        robot_states: torch.Tensor | None = None,
-        *,
-        texts=None,
+        robot_states,
+        texts,
     ):
         """
         目前仅用 point_clouds; 保留其他参数以保持 Actor 接口一致
