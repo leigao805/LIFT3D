@@ -161,7 +161,7 @@ class PointCloudGuidedBatchNormMLP(Actor):
 
 
 # ---------------------------------------------------------------
-class TokenVoxelGraspActor(nn.Module):
+class TokenVoxelGraspActor(Actor):
     """
     Lift3D Stage‑2 策略网络 —— 使用:
     (1) Lift3dCLIP 输出的 patch‑token 特征+坐标
