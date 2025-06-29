@@ -1,13 +1,13 @@
 _target_: lift3d.models.actor.TokenVoxelGraspActor
 
-# ① 点云编码器（Lift3d‑CLIP + LoRA 已在 model_loader 里处理）
+# ① 点云编码器（Lift3d‑CLIP + LoRA 已在 model_loader 里处理）
 point_cloud_encoder:
   _target_: lift3d.models.lift3d.model_loader.lift3d_clip_base
   return_tokens: true
   return_xyz: true
 
 # ② 体素化 & Sparse U‑Net
-voxel_size: 0.01                       # 1 cm 体素
+voxel_size: 0.01                       # 1 cm 体素
 pc_range: [-0.5, -0.5, -0.1, 0.5, 0.5, 0.4]
 k_nearest: 4
 

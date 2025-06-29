@@ -161,7 +161,7 @@ class PointCloudGuidedBatchNormMLP(Actor):
 
 
 # ---------------------------------------------------------------
-class TokenVoxelGraspActor(nn.Module):
+class TokenVoxelGraspActor(Actor):
     """
     Lift3D Stage‑2 策略网络 —— 使用:
     (1) Lift3dCLIP 输出的 patch‑token 特征+坐标
@@ -218,6 +218,7 @@ class TokenVoxelGraspActor(nn.Module):
         目前仅用 point_clouds; 保留其他参数以保持 Actor 接口一致
         """
         # ----- 1. Lift3D‑CLIP : 得到 CLS token + patch‑tokens + xyz -----
+        point_clouds = PointCloud.normalize(point_clouds)
         cls_tok, patch_tok, patch_xyz = self.point_cloud_encoder(
             point_clouds, return_tokens=True, return_xyz=True
         )  # (B,768) (B,K,768) (B,K,3)
