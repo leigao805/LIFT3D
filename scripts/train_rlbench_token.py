@@ -12,7 +12,8 @@ AGENTS = [
     # ('pointnet_bnmlp', 16),
     # ('point_next_bnmlp', 16),
     # ('pointnet_plus_plus_bnmlp', 16),
-    ('lift3d_bnmlp', 16),
+    # ('lift3d_bnmlp', 16),
+    ('token_voxel_grasp', 16),
 ]
 
 TASKS = [

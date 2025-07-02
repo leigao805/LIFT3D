@@ -3,25 +3,30 @@ import subprocess
 
 
 DATA_ROOT = './data/rlbench'
+#DATA_ROOT = './data/rlbench_i1_quaternion'
 
 AGENTS = [
-    ('clip_bnmlp', 256),
-    ('vc1_bnmlp', 256),
-    ('r3m_bnmlp', 256),
-    ('spa_bnmlp', 256),
-    ('pointnet_bnmlp', 16),
-    ('point_next_bnmlp', 16),
-    ('pointnet_plus_plus_bnmlp', 16),
+    # ('clip_bnmlp', 256),
+    # ('vc1_bnmlp', 256),
+    # ('r3m_bnmlp', 256),
+    # ('spa_bnmlp', 256),
+    # ('pointnet_bnmlp', 16),
+    # ('point_next_bnmlp', 16),
+    # ('pointnet_plus_plus_bnmlp', 16),
     ('lift3d_bnmlp', 16),
 ]
 
 TASKS = [
-    'close_box',
-    'put_rubbish_in_bin',
-    'close_laptop_lid',
-    'water_plants',
-    'unplug_charger',
-    'toilet_seat_down',
+    # 'close_box',
+    # 'put_rubbish_in_bin',
+    # 'close_laptop_lid',
+    # 'water_plants',
+    # 'unplug_charger',
+    # 'toilet_seat_down',
+
+
+    "stack_blocks",
+
 ]
 
 CAMERAS = [
@@ -41,6 +46,7 @@ def test_codebase():
                     f'camera_name={camera}', 
                     f"dataloader.batch_size={batch_size}",
                     f'dataset_dir={DATA_ROOT}/{task}.zarr',
+                    f"wandb.mode=offline",
                 ]
                 print(colored('[INFO]', 'blue'), ' '.join(cmd))
                 subprocess.run(cmd)

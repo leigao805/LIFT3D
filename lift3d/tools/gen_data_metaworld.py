@@ -306,7 +306,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task-name", type=str, default="assembly")
+    parser.add_argument("--task-name", type=str, default="push")
     parser.add_argument("--camera-name", type=str, default="corner")
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--num-episodes", type=int, default=30)
