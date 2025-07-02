@@ -165,6 +165,7 @@ class TokenVoxelGraspActor(Actor):
         point_cloud_encoder: nn.Module,
         *,
         robot_state_dim: int,
+        action_dim: int | None = None,      # 兼容其它 Actor 的签名
         token_dropout_rate: float = 0.15,
         robot_state_dropout_rate: float = 0.10,
         voxel_size: float = 0.01,
@@ -175,6 +176,7 @@ class TokenVoxelGraspActor(Actor):
         sparse_unet_cfg: Dict | None = None,
         orient_head_cfg: Dict | None = None,
         gripper_head_cfg: Dict | None = None,
+        **kwargs,                            # 捕获将来可能的多余参数
     ):
         super().__init__()
 
