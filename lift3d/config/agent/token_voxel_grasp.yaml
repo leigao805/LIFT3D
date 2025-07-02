@@ -4,7 +4,7 @@ instantiate_config:
 
 # ① 点云编码器（Lift3d‑CLIP + LoRA 已在 model_loader 里处理）
 point_cloud_encoder:
-  _target_: lift3d.models.lift3d.model_loader.lift3d_clip_baserobot_state_dim: ${dataset.robot_state_dim}
+  _target_: lift3d.models.lift3d.model_loader.lift3d_clip_base
   token_dropout_rate: 0.0
   robot_state_dropout_rate: 0.0
   return_tokens: true
