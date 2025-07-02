@@ -227,6 +227,8 @@ class TokenVoxelGraspActor(Actor):
             voxel_size=self.voxel_size,
             pc_range=self.pc_range
         )                                       # feats: (N_total, 768)
+        xyz_min = coords[:, 1:].min(0).values
+        coords[:, 1:] -= xyz_min             # 现在最小 = 0
 
         # 3. robot state → embed & broadcast → concat
         rs_emb = self.robot_state_dropout(self.robot_state_encoder(robot_states))  # (B,768)
