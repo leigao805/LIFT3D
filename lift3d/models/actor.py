@@ -236,7 +236,13 @@ class TokenVoxelGraspActor(Actor):
         feats = torch.cat([feats, rs_broadcast], dim=1)                             # (N_total,1536)
 
         # 4. sparse UNet → heatmap
-        heat_dense = self.sparse_unet(to_me_tensor(coords, feats)).dense()          # (B,1,D,H,W)
+        heat_out = self.sparse_unet(to_me_tensor(coords, feats)).dense()
+
+        # 如果 UNet 返回 (tensor, extra) 形式，取第一个分量
+        if isinstance(heat_out, (tuple, list)):
+            heat_dense = heat_out[0]
+        else:
+            heat_dense = heat_out                    # 原生 MinkowskiTensor
 
         # 5. choose voxel with max score
         B, _, D, H, W = heat_dense.shape
