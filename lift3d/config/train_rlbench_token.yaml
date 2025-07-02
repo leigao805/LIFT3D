@@ -1,7 +1,6 @@
 # ----------------- 基础继承 -----------------
 defaults:
   - train_rlbench
-  - agent: token_voxel_grasp            # ★ 新增
   - loss_cfg: grasp_loss                # ★ 新增
 
 # --------- 可按需要覆盖全局超参 ---------------

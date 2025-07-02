@@ -1,4 +1,6 @@
-_target_: lift3d.models.actor.TokenVoxelGraspActor
+name: TokenVoxelGraspActor
+instantiate_config:
+  _target_: lift3d.models.actor.TokenVoxelGraspActor
 
 # ① 点云编码器（Lift3d‑CLIP + LoRA 已在 model_loader 里处理）
 point_cloud_encoder:
@@ -8,17 +10,17 @@ point_cloud_encoder:
   return_tokens: true
   return_xyz: true
 
-# ② 体素化 & Sparse U‑Net
-voxel_size: 0.01                       # 1 cm 体素
-pc_range: [-0.5, -0.5, -0.1, 0.5, 0.5, 0.4]
-k_nearest: 4
+  # ② 体素化 & Sparse U‑Net
+  voxel_size: 0.01                       # 1 cm 体素
+  pc_range: [-0.5, -0.5, -0.1, 0.5, 0.5, 0.4]
+  k_nearest: 4
 
-sparse_unet_cfg:
-  in_ch: 768
-  base_ch: 96
-  depth: 3
-  out_ch: 1
+  sparse_unet_cfg:
+    in_ch: 768
+    base_ch: 96
+    depth: 3
+    out_ch: 1
 
-# ③ Heads (用默认即可，也可覆写 hidden_dims 等)
-orient_head_cfg: {}
-gripper_head_cfg: {}
+  # ③ Heads (用默认即可，也可覆写 hidden_dims 等)
+  orient_head_cfg: {}
+  gripper_head_cfg: {}

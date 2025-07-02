@@ -421,8 +421,12 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rlbench-data-root", type=str, default="~/Data/RLBench_224")
-    parser.add_argument("--task-name", type=str, default="open_box")
+    parser.add_argument("--rlbench-data-root", type=str, default=str(
+            pathlib.Path(__file__).resolve().parent.parent.parent
+            / "Data"
+            / "RLBench_224"
+        ))
+    parser.add_argument("--task-name", type=str, default="place_cups")
     parser.add_argument("--camera-name", type=str, default="front")
     parser.add_argument(
         "--point-cloud-camera-names",

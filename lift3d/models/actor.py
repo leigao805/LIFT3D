@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+# lift3d/models/actor.py  (新增部分类)
+# ---------------------------------------------------------------
+
 import abc
 from typing import List
 
@@ -11,16 +16,12 @@ from lift3d.models.mlp.batchnorm_mlp import BatchNormMLP
 from lift3d.models.mlp.mlp import MLP
 
 
-# lift3d/models/actor.py  (新增部分类)
-# ---------------------------------------------------------------
-from __future__ import annotations
 import torch.nn.functional as F
 from typing import Dict, Tuple
 
 from lift3d.models.voxel_utils import tokens_to_sparse_voxel, to_me_tensor
 from lift3d.models.sparse_unet import Sparse3DUNet
 from lift3d.models.grasp_token_head import GraspOrientHead, GripperStateHead
-from lift3d.models.lift3d_clip import Lift3dCLIP     # 仅用于类型提示
 
 class Actor(nn.Module, metaclass=abc.ABCMeta):
     @abc.abstractmethod

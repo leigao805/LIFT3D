@@ -5,17 +5,18 @@ import sys
 
 from lift3d.helpers.common import Logger
 
-RLBENCH_DATA_ROOT = "~/Data/RLBench_224"
+RLBENCH_DATA_ROOT = "/workspace/LIFT3D/Data/RLBench_224"
 DATASET_ROOT = "data/rlbench"
 
-
 TASKS = [
-    "close_box",
-    "put_rubbish_in_bin",
-    "close_laptop_lid",
-    "water_plants",
-    "unplug_charger",
-    "toilet_seat_down",
+    # "close_box",
+    # "put_rubbish_in_bin",
+    # "close_laptop_lid",
+    # "water_plants",
+    # "unplug_charger",
+    # "toilet_seat_down",
+    
+    "stack_blocks",
 ]
 
 
