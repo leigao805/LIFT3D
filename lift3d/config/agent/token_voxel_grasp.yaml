@@ -2,7 +2,9 @@ _target_: lift3d.models.actor.TokenVoxelGraspActor
 
 # ① 点云编码器（Lift3d‑CLIP + LoRA 已在 model_loader 里处理）
 point_cloud_encoder:
-  _target_: lift3d.models.lift3d.model_loader.lift3d_clip_base
+  _target_: lift3d.models.lift3d.model_loader.lift3d_clip_baserobot_state_dim: ${dataset.robot_state_dim}
+  token_dropout_rate: 0.0
+  robot_state_dropout_rate: 0.0
   return_tokens: true
   return_xyz: true
 
