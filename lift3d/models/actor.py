@@ -193,7 +193,7 @@ class TokenVoxelGraspActor(Actor):
 
         # 3) Sparse‑UNet —— in_channels 设为 2 × feat_dim
         su_cfg = dict(sparse_unet_cfg or {})
-        su_cfg["in_channels"] = fused_dim
+        su_cfg["in_ch"] = fused_dim
         self.sparse_unet = Sparse3DUNet(**su_cfg)
 
         # 4) heads（输入 1536）
