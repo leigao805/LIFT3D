@@ -1,15 +1,12 @@
-# ----------------- 基础继承 -----------------
 defaults:
   - train_rlbench
-  - loss_cfg: grasp_loss                # ★ 新增
+  - loss_cfg: grasp_loss
 
-# --------- 可按需要覆盖全局超参 ---------------
 seed: 0
+
 dataloader:
   batch_size: 8
+
 train:
   learning_rate: 1e-4
   num_epochs: 100
-
-benchmark:
-  loss_func: lift3d.loss.grasp_loss.compute_loss
