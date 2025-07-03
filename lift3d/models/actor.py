@@ -245,7 +245,10 @@ class TokenVoxelGraspActor(Actor):
             0, batch_ids.unsqueeze(-1).expand(-1, 3),
             xyz_voxel, reduce='amin')
         # 2‑a) 先找到各 batch 的最小“体素索引” → idx_min  (整型)
-        idx_min = torch.full((B, 3), 1e9, dtype=torch.long, device=coords.device)
+        idx_min = torch.full((B, 3),
+                     torch.iinfo(coords.dtype).max,   # 取该 dtype 可表示的最大值
+                     dtype=coords.dtype,
+                     device=coords.device)
         idx_min = idx_min.scatter_reduce(
             0, batch_ids.unsqueeze(-1).expand(-1, 3),   # index: (N_total,3)
             coords[:, 1:], reduce='amin')
