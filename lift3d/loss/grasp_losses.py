@@ -178,13 +178,16 @@ def compute_loss(preds, actions: torch.Tensor):
         xyz_gt  = actions[:, :3]
         quat_gt = actions[:, 3:7]
         grip_gt = actions[:, 7:8]
-
+        # =========================================================
+        # >>>>>>> 【就在这里插入临时调试代码】 <<<<<<<<
+        #
         # ---------- 0) 调试：检查 GT 是否落在体素网格内 ----------
-        with torch.no_grad():
+        with torch.no_grad():           # 避免干扰梯度
             voxel_size = preds["voxel_size"]      # scalar tensor
             grid_size  = preds["grid_size"]       # (3,)
             xyz_min    = preds["xyz_min"]         # (B,3)
 
+            # 反向找出 one‑hot 为 1 的体素整数坐标 idx
             idx = ((xyz_gt - xyz_min) / voxel_size).long()
             D, H, W = grid_size.tolist()
             oob = (
@@ -196,12 +199,24 @@ def compute_loss(preds, actions: torch.Tensor):
             if torch.rand(1).item() < 0.01:       # 随机抽 1% step
                 print(f">> OOB ratio: {oob.float().mean().item():.3f}")
 
+            # 还原到世界坐标的体素中心
+            center_xyz = preds["xyz_min"] + (idx.float() + 0.5) * preds["voxel_size"]
+            err = (center_xyz - xyz_gt).norm(dim=-1)   # (B,)
+            print("mean EE‑voxel‑center err (m):", err.mean().item())
+
+
+        # =========================================================
+
         heat_gt = pose_to_heatmap(
             xyz_gt,
             preds["xyz_min"],
             preds["voxel_size"],
             preds["grid_size"]
         )
+
+        heat_sum = heat_gt.flatten(1).sum(dim=1)         # (B,)
+        assert (heat_sum == 1).all(), \
+            "GT heatmap 非 one‑hot！请检查 pose_to_heatmap() 与坐标系是否匹配"
 
         criterion = GraspLoss()
         return criterion(preds, heat_gt, quat_gt, grip_gt)
