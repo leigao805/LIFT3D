@@ -207,6 +207,12 @@ class TokenVoxelGraspActor(Actor):
         self.pc_range = list(pc_range)
         self.k_nearest = k_nearest
 
+    def _dict2action(self, out_dict: dict) -> torch.Tensor:
+        pos  = out_dict["voxel_center"]                    # (B,3)
+        quat = F.normalize(out_dict["quat"], p=2, dim=-1)  # <- 保证单位四元数
+        grip = torch.sigmoid(out_dict["gripper"])          # (B,1)
+        return torch.cat([pos, quat, grip], dim=-1)        # (B,8)
+
     # ------------------------------------------------------------------
     def forward(
         self,
@@ -269,9 +275,14 @@ class TokenVoxelGraspActor(Actor):
         quat_pred   = self.orient_head(emb)                                         # (B,4)
         gripper_log = self.gripper_head(emb)                                        # (B,1)
 
-        return {
-            "heatmap": heat_dense,   # (B,1,D,H,W)
-            "quat": quat_pred,       # (B,4)
-            "gripper": gripper_log,  # (B,1)
-            "cls_token": cls_tok,    # optional
+        # === 结束阶段 ===
+        output = {
+            "heatmap": heat_dense,
+            "quat":    quat_pred,
+            "gripper": gripper_log,
+            "voxel_center": voxel_centers,   # <— 额外返回
         }
+        if self.training:          # train: 返回 dict 供 loss 解析
+            return output
+        else:                      # eval: 返回 RLBench 动作
+            return self._dict2action(output)
