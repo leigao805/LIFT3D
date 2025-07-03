@@ -82,7 +82,7 @@ def gripper_bce(
     logits: torch.Tensor, target: torch.Tensor, pos_weight: float | None = None
 ) -> torch.Tensor:
     weight = None if pos_weight is None else torch.tensor(pos_weight, device=logits.device)
-    return F.binary_cross_entropy_with_logits(logits.squeeze(-1), target.float(), pos_weight=weight)
+    return F.binary_cross_entropy_with_logits(logits, target.float(), pos_weight=weight)
 
 
 # --------------------------------------------------------------------------- #
