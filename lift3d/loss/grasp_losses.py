@@ -179,6 +179,23 @@ def compute_loss(preds, actions: torch.Tensor):
         quat_gt = actions[:, 3:7]
         grip_gt = actions[:, 7:8]
 
+        # ---------- 0) 调试：检查 GT 是否落在体素网格内 ----------
+        with torch.no_grad():
+            voxel_size = preds["voxel_size"]      # scalar tensor
+            grid_size  = preds["grid_size"]       # (3,)
+            xyz_min    = preds["xyz_min"]         # (B,3)
+
+            idx = ((xyz_gt - xyz_min) / voxel_size).long()
+            D, H, W = grid_size.tolist()
+            oob = (
+                (idx[:, 0] < 0) | (idx[:, 0] >= W) |
+                (idx[:, 1] < 0) | (idx[:, 1] >= H) |
+                (idx[:, 2] < 0) | (idx[:, 2] >= D)
+            )
+            # 只在第一次 step 打印即可；或用 logger
+            if torch.rand(1).item() < 0.01:       # 随机抽 1% step
+                print(f">> OOB ratio: {oob.float().mean().item():.3f}")
+
         heat_gt = pose_to_heatmap(
             xyz_gt,
             preds["xyz_min"],
