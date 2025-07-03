@@ -13,7 +13,7 @@ instantiate_config:
 
   # ② 体素化 & Sparse U‑Net
   voxel_size: 0.01                       # 1 cm 体素
-  pc_range: [-0.5, -0.5, -0.1, 0.5, 0.5, 0.4]
+  pc_range: [-0.6, -0.6, -0.2, 0.6, 0.6, 0.5]
   k_nearest: 4
 
   sparse_unet_cfg:

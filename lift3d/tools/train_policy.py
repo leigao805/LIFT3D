@@ -14,7 +14,7 @@ from termcolor import colored
 from lift3d.envs import Evaluator
 from lift3d.helpers.common import Logger, WandBLogger, set_seed
 from lift3d.helpers.pytorch import AverageMeter, log_params_to_file
-
+from omegaconf import OmegaConf
 
 @hydra.main(version_base=None, config_path="../config", config_name="train")
 def main(config):
@@ -42,6 +42,8 @@ def main(config):
     )
     Logger.print_seperator()
 
+    print("[DEBUG] final hydra config\n", OmegaConf.to_yaml(config.agent))
+    
     ############
     # set seed #
     ############
