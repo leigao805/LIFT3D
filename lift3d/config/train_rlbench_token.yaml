@@ -10,3 +10,6 @@ dataloader:
 train:
   learning_rate: 1e-4
   num_epochs: 100
+
+benchmark:
+  loss_func: lift3d.loss.grasp_loss.compute_loss
