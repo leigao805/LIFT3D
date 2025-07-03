@@ -143,14 +143,39 @@ class GraspLoss(nn.Module):
         total = self.w_heat * l_heat + self.w_quat * l_quat + self.w_grip * l_grip
         return total, {"heat": l_heat, "quat": l_quat, "grip": l_grip}
 
-# --- 在 grasp_losses.py 末尾或合适位置 -----------------
-def compute_loss(preds: dict, actions: torch.Tensor):
+# lift3d/loss/grasp_losses.py
+# --------------------------------------------
+def compute_loss(preds, actions: torch.Tensor):
     """
-    Wrapper expected by train_policy.py
-    `actions` is RLBench 8‑DoF tensor:  x y z qx qy qz qw gripper
+    既兼容训练产生的 `dict`，也兼容验证阶段得到的 (B,8) action tensor。
+    `actions` 总是 RLBench 8‑DoF tensor：x y z qx qy qz qw gripper
     """
-    heat_gt   = preds["heatmap"].detach()*0  # <- 没有真 GT 时给零；或从 dataset 取
-    quat_gt   = actions[:, 3:7]
-    grip_gt   = actions[:, 7:8]
-    criterion = GraspLoss()                  # 默认权重即可；也可放全局
-    return criterion(preds, heat_gt, quat_gt, grip_gt)
+    # ---------- 1) 如果前向返回 dict（训练阶段） ----------
+    if isinstance(preds, dict):
+        heat_gt = torch.zeros_like(preds["heatmap"]).detach()
+        quat_gt = actions[:, 3:7]
+        grip_gt = actions[:, 7:8]
+
+        criterion = GraspLoss()                            # 默认权重
+        return criterion(preds, heat_gt, quat_gt, grip_gt)
+
+    # ---------- 2) 如果前向返回 (B,8) tensor（验证阶段） ----------
+    elif torch.is_tensor(preds) and preds.ndim == 2 and preds.size(1) == 8:
+        quat_pred = preds[:, 3:7]
+        quat_gt   = actions[:, 3:7]
+
+        grip_pred = preds[:, 7:8]
+        grip_gt   = actions[:, 7:8]
+
+        # 2‑a) quaternion 对齐损失
+        l_quat = quat_loss(quat_pred, quat_gt)
+
+        # 2‑b) gripper BCE
+        l_grip = gripper_bce(grip_pred, grip_gt)
+
+        total = l_quat + l_grip      # heatmap_loss 置 0
+        return total, {"heat": torch.tensor(0., device=preds.device),
+                       "quat": l_quat, "grip": l_grip}
+
+    else:
+        raise TypeError(f"`preds` must be dict or (B,8) tensor, got {type(preds)}")
