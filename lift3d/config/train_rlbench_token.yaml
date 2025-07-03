@@ -16,4 +16,4 @@ train:
 # ★ 显式把 loss_func 改成 grasp_loss（DictConfig 形式，而非纯字符串）
 benchmark:
   loss_func:
-    _target_: lift3d.loss.grasp_loss.compute_loss
+    _target_: lift3d.loss.grasp_losses.compute_loss
