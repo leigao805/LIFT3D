@@ -199,6 +199,9 @@ def compute_loss(preds, actions: torch.Tensor):
             if torch.rand(1).item() < 0.01:       # 随机抽 1% step
                 print(f">> OOB ratio: {oob.float().mean().item():.3f}")
 
+            oob_ratio = oob.float().mean().item()
+            print(f"[dbg] OOB ratio this batch: {oob_ratio:.3f}")
+
             # 还原到世界坐标的体素中心
             center_xyz = preds["xyz_min"] + (idx.float() + 0.5) * preds["voxel_size"]
             err = (center_xyz - xyz_gt).norm(dim=-1)   # (B,)
