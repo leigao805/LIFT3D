@@ -143,6 +143,29 @@ class GraspLoss(nn.Module):
         total = self.w_heat * l_heat + self.w_quat * l_quat + self.w_grip * l_grip
         return total, {"heat": l_heat, "quat": l_quat, "grip": l_grip}
 
+def pose_to_heatmap(xyz_gt: torch.Tensor,
+                    xyz_min: torch.Tensor,  # (B,3)  or broadcastable
+                    voxel_size: torch.Tensor,
+                    grid_size: torch.Tensor):
+    """
+    xyz_gt  : (B,3)   in metres, same world frame as pc_range
+    xyz_min : (B,3)   per‑batch origin (the same one the Actor subtracted)
+    voxel_size: scalar tensor
+    grid_size : (3,)   [D,H,W]
+    """
+    B = xyz_gt.shape[0]
+    D, H, W = grid_size.tolist()
+    idx = ((xyz_gt - xyz_min) / voxel_size).long()          # (B,3)
+    heat = torch.zeros(B, 1, D, H, W, device=xyz_gt.device)
+    valid = ((idx[:, 0] >= 0) & (idx[:, 0] < W) &
+             (idx[:, 1] >= 0) & (idx[:, 1] < H) &
+             (idx[:, 2] >= 0) & (idx[:, 2] < D))
+    if valid.any():
+        b_ids = torch.arange(B, device=xyz_gt.device)[valid]
+        heat[b_ids, 0, idx[valid, 2], idx[valid, 1], idx[valid, 0]] = 1.0
+    return heat
+
+
 # lift3d/loss/grasp_losses.py
 # --------------------------------------------
 def compute_loss(preds, actions: torch.Tensor):
@@ -152,11 +175,18 @@ def compute_loss(preds, actions: torch.Tensor):
     """
     # ---------- 1) 如果前向返回 dict（训练阶段） ----------
     if isinstance(preds, dict):
-        heat_gt = torch.zeros_like(preds["heatmap"]).detach()
+        xyz_gt  = actions[:, :3]
         quat_gt = actions[:, 3:7]
         grip_gt = actions[:, 7:8]
 
-        criterion = GraspLoss()                            # 默认权重
+        heat_gt = pose_to_heatmap(
+            xyz_gt,
+            preds["xyz_min"],
+            preds["voxel_size"],
+            preds["grid_size"]
+        )
+
+        criterion = GraspLoss()
         return criterion(preds, heat_gt, quat_gt, grip_gt)
 
     # ---------- 2) 如果前向返回 (B,8) tensor（验证阶段） ----------

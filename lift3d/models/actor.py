@@ -233,8 +233,25 @@ class TokenVoxelGraspActor(Actor):
             voxel_size=self.voxel_size,
             pc_range=self.pc_range
         )                                       # feats: (N_total, 768)
-        xyz_min = coords[:, 1:].min(0).values
-        coords[:, 1:] -= xyz_min             # 现在最小 = 0
+        batch_ids = coords[:, 0].long()
+
+        B = point_clouds.size(0)                        # 立即得到 batch 大小
+        # 体素中心的连续坐标（m） = 整数索引 × voxel_size + pc_range[:3] + 0.5*voxel
+        xyz_voxel = coords[:, 1:].float() * self.voxel_size \
+                    + torch.tensor(self.pc_range[:3], device=coords.device)
+        # (B,3) 取每个 batch 在三个轴向的最小值
+        xyz_min = torch.full((B, 3), 1e9, device=coords.device)
+        xyz_min = xyz_min.scatter_reduce(
+            0, batch_ids.unsqueeze(-1).expand(-1, 3),
+            xyz_voxel, reduce='amin')
+        # 2‑a) 先找到各 batch 的最小“体素索引” → idx_min  (整型)
+        idx_min = torch.full((B, 3), 1e9, dtype=torch.long, device=coords.device)
+        idx_min = idx_min.scatter_reduce(
+            0, batch_ids.unsqueeze(-1).expand(-1, 3),   # index: (N_total,3)
+            coords[:, 1:], reduce='amin')
+
+        # 2‑b) 再做零起点平移
+        coords[:, 1:] -= idx_min[batch_ids]             # ✔ 每行减自己的 batch 最小值
 
         # 3. robot state → embed & broadcast → concat
         rs_emb = self.robot_state_dropout(self.robot_state_encoder(robot_states))  # (B,768)
@@ -256,10 +273,8 @@ class TokenVoxelGraspActor(Actor):
         z = (flat_idx // (H * W)).int()
         y = ((flat_idx % (H * W)) // W).int()
         x = (flat_idx % W).int()
-        voxel_centers = torch.stack([x, y, z], dim=1).float() * self.voxel_size
-        voxel_centers += torch.tensor(self.pc_range[:3], device=point_clouds.device) + (
-            self.voxel_size * 0.5
-        )
+        voxel_idx = torch.stack([x, y, z], dim=1).float()          # (B,3)
+        voxel_centers = xyz_min + voxel_idx * self.voxel_size + 0.5 * self.voxel_size
 
         # 6. aggregate k‑NN patch tokens
         dist = torch.cdist(voxel_centers.unsqueeze(1), patch_xyz)                   # (B,1,K)
@@ -272,17 +287,32 @@ class TokenVoxelGraspActor(Actor):
         emb = torch.cat([token_agg, rs_emb], dim=1)                                 # (B,1536)
 
         # 8. heads
-        quat_pred   = self.orient_head(emb)                                         # (B,4)
-        gripper_log = self.gripper_head(emb)                                        # (B,1)
+        quat_pred   = self.orient_head(emb)        # (B,4)
+        gripper_log = self.gripper_head(emb)       # (B,1)
 
-        # === 结束阶段 ===
+        # ----------------------------------------------------------
+        # ☆ 把体素化过程的关键信息一并带回，以便 loss 能反推 heat‑GT
+        # ----------------------------------------------------------
+
+        xyz_min_world = idx_min.float() * self.voxel_size \
+                + torch.tensor(self.pc_range[:3], device=coords.device)
         output = {
-            "heatmap": heat_dense,
-            "quat":    quat_pred,
-            "gripper": gripper_log,
-            "voxel_center": voxel_centers,   # <— 额外返回
+            "heatmap":     heat_dense,                          # (B,1,D,H,W)
+            "quat":        quat_pred,                           # (B,4)
+            "gripper":     gripper_log,                         # (B,1)
+
+            # —— inference 用来拼成 (B,8) 动作
+            "voxel_center": voxel_centers,                      # (B,3)
+
+            # —— 供 loss.pose_to_heatmap() 使用的几项
+            "xyz_min":     xyz_min_world,  # (B,3) 世界坐标系下的局部体素原点
+            "grid_size":   torch.tensor([D, H, W],
+                                        device=heat_dense.device),   # (3,) NEW
+            "voxel_size":  torch.tensor(self.voxel_size,
+                                        device=heat_dense.device),   # (1,) NEW
         }
-        if self.training:          # train: 返回 dict 供 loss 解析
-            return output
-        else:                      # eval: 返回 RLBench 动作
-            return self._dict2action(output)
+
+        if self.training:
+            return output          # == dict 给 loss
+        else:
+            return self._dict2action(output)  # == (B,8)
