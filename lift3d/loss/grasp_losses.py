@@ -1,4 +1,4 @@
-# lift3d/losses/grasp_losses.py
+# lift3d/loss/grasp_losses.py
 # Copyright (c) 2025 Lift3D authors.
 # SPDX-License-Identifier: MIT
 """
@@ -142,3 +142,15 @@ class GraspLoss(nn.Module):
 
         total = self.w_heat * l_heat + self.w_quat * l_quat + self.w_grip * l_grip
         return total, {"heat": l_heat, "quat": l_quat, "grip": l_grip}
+
+# --- 在 grasp_losses.py 末尾或合适位置 -----------------
+def compute_loss(preds: dict, actions: torch.Tensor):
+    """
+    Wrapper expected by train_policy.py
+    `actions` is RLBench 8‑DoF tensor:  x y z qx qy qz qw gripper
+    """
+    heat_gt   = preds["heatmap"].detach()*0  # <- 没有真 GT 时给零；或从 dataset 取
+    quat_gt   = actions[:, 3:7]
+    grip_gt   = actions[:, 7:8]
+    criterion = GraspLoss()                  # 默认权重即可；也可放全局
+    return criterion(preds, heat_gt, quat_gt, grip_gt)
