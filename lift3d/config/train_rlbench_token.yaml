@@ -1,6 +1,8 @@
+# train_rlbench_token.yaml  ─ 完整最小化示例
 defaults:
-  - train_rlbench
-  - loss_cfg: grasp_loss
+  - train_rlbench               # 原公共训练配置
+  - loss_cfg: grasp_loss        # 定义 heatmap + quat + gripper 的损失
+  - _self_                      # ← 让本文件的条目最终覆盖上面两行
 
 seed: 0
 
@@ -10,3 +12,8 @@ dataloader:
 train:
   learning_rate: 1e-4
   num_epochs: 100
+
+# ★ 显式把 loss_func 改成 grasp_loss（DictConfig 形式，而非纯字符串）
+benchmark:
+  loss_func:
+    _target_: lift3d.loss.grasp_loss.compute_loss
