@@ -155,9 +155,9 @@ def to_me_tensor(
     if spatial_shape is None:
         return ME.SparseTensor(feats, coords)          # 原有做法
     else:
-        cm = ME.CoordinateManager()                 # ← 删掉 device=...
-        cm.initialize(coords, tensor_stride=1,
+        # D = 3  表示 3‑D 稀疏体素；device 放到 initialize 里即可
+        cm = ME.CoordinateManager(D=3)
+        cm.initialize(coords,
+                      tensor_stride=1,
                       spatial_size=spatial_shape,
-                      device=coords.device)         # 必须显式传入 device
-        return ME.SparseTensor(feats, coords,
-                               coordinate_manager=cm)
+                      device=coords.device)
