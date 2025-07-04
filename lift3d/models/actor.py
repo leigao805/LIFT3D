@@ -227,42 +227,35 @@ class TokenVoxelGraspActor(Actor):
             point_clouds, return_tokens=True, return_xyz=True
         )  # (B,768) (B,K,768) (B,K,3)
 
-        # 2. tokens → sparse voxels
-        coords, feats = tokens_to_sparse_voxel(
-            patch_xyz, patch_tok,
-            voxel_size=self.voxel_size,
-            pc_range=self.pc_range
-        )                                       # feats: (N_total, 768)
-        batch_ids = coords[:, 0].long()
+        # ------------------------------------------------------------------
+        # 2. tokens → sparse voxels  （**固定全局网格**）
+        # ------------------------------------------------------------------
+        range_min = torch.tensor(self.pc_range[:3], device=patch_xyz.device)   # (3,)
+        range_max = torch.tensor(self.pc_range[3:], device=patch_xyz.device)   # (3,)
 
-        B = point_clouds.size(0)                        # 立即得到 batch 大小
-        # 体素中心的连续坐标（m） = 整数索引 × voxel_size + pc_range[:3] + 0.5*voxel
-        xyz_voxel = coords[:, 1:].float() * self.voxel_size \
-                    + torch.tensor(self.pc_range[:3], device=coords.device)
-        # (B,3) 取每个 batch 在三个轴向的最小值
-        xyz_min = torch.full((B, 3), 1e9, device=coords.device)
-        xyz_min = xyz_min.scatter_reduce(
-            0, batch_ids.unsqueeze(-1).expand(-1, 3),
-            xyz_voxel, reduce='amin')
-        # 2‑a) 先找到各 batch 的最小“体素索引” → idx_min  (整型)
-        idx_min = torch.full((B, 3),
-                     torch.iinfo(coords.dtype).max,   # 取该 dtype 可表示的最大值
-                     dtype=coords.dtype,
-                     device=coords.device)
-        idx_min = idx_min.scatter_reduce(
-            0, batch_ids.unsqueeze(-1).expand(-1, 3),   # index: (N_total,3)
-            coords[:, 1:], reduce='amin')
+        grid_size = ((range_max - range_min) / self.voxel_size).long()         # (3,) = [D,H,W]
+        D, H, W = grid_size.tolist()
 
-        # 2‑b) 再做零起点平移
-        coords[:, 1:] -= idx_min[batch_ids]             # ✔ 每行减自己的 batch 最小值
+        # （B,K,3）→ 量化到整数体素索引，超界 clip 回边界
+        idx = ((patch_xyz - range_min) / self.voxel_size).long()
+        idx = idx.clamp(min=0, max=grid_size.unsqueeze(0) - 1)                 # [0, D‑1]…
 
+        batch_ids = torch.repeat_interleave(
+            torch.arange(point_clouds.size(0), device=patch_xyz.device),
+            repeats=idx.size(1)
+        )
+        coords = torch.cat([batch_ids.unsqueeze(1), idx.view(-1, 3)], dim=1).int()   # (N,4)
+
+        feats = patch_tok.reshape(-1, patch_tok.size(-1))                      # (N,768)
+        
         # 3. robot state → embed & broadcast → concat
         rs_emb = self.robot_state_dropout(self.robot_state_encoder(robot_states))  # (B,768)
         rs_broadcast = rs_emb[coords[:, 0].long()]                                  # (N_total,768)
         feats = torch.cat([feats, rs_broadcast], dim=1)                             # (N_total,1536)
 
         # 4. sparse UNet → heatmap
-        heat_out = self.sparse_unet(to_me_tensor(coords, feats)).dense()
+        me_tensor = to_me_tensor(coords, feats, spatial_shape=grid_size.tolist())
+        heat_out  = self.sparse_unet(me_tensor).dense()
 
         # 如果 UNet 返回 (tensor, extra) 形式，取第一个分量
         if isinstance(heat_out, (tuple, list)):
@@ -277,7 +270,7 @@ class TokenVoxelGraspActor(Actor):
         y = ((flat_idx % (H * W)) // W).int()
         x = (flat_idx % W).int()
         voxel_idx = torch.stack([x, y, z], dim=1).float()          # (B,3)
-        voxel_centers = xyz_min + voxel_idx * self.voxel_size + 0.5 * self.voxel_size
+        voxel_centers = range_min + (voxel_idx + 0.5) * self.voxel_size         # (B,3)
 
         # 6. aggregate k‑NN patch tokens
         dist = torch.cdist(voxel_centers.unsqueeze(1), patch_xyz)                   # (B,1,K)
@@ -297,8 +290,8 @@ class TokenVoxelGraspActor(Actor):
         # ☆ 把体素化过程的关键信息一并带回，以便 loss 能反推 heat‑GT
         # ----------------------------------------------------------
 
-        xyz_min_world = idx_min.float() * self.voxel_size \
-                + torch.tensor(self.pc_range[:3], device=coords.device)
+        xyz_min_world = range_min.unsqueeze(0).expand(point_clouds.size(0), 3)  # (B,3)
+
         output = {
             "heatmap":     heat_dense,                          # (B,1,D,H,W)
             "quat":        quat_pred,                           # (B,4)
@@ -309,8 +302,7 @@ class TokenVoxelGraspActor(Actor):
 
             # —— 供 loss.pose_to_heatmap() 使用的几项
             "xyz_min":     xyz_min_world,  # (B,3) 世界坐标系下的局部体素原点
-            "grid_size":   torch.tensor([D, H, W],
-                                        device=heat_dense.device),   # (3,) NEW
+            "grid_size":   grid_size.to(heat_dense.device),
             "voxel_size":  torch.tensor(self.voxel_size,
                                         device=heat_dense.device),   # (1,) NEW
         }

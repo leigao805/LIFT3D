@@ -109,10 +109,21 @@ def tokens_to_sparse_voxel(
     feats = tokens_feat.reshape(-1, tokens_feat.shape[-1])     # → (N, C)
 
     # 去重：同一体素取所有 token 特征平均
-    coords_hash = (
-        coords[:, 0] * 2**48 + coords[:, 1] * 2**32
-        + coords[:, 2] * 2**16 + coords[:, -1]
-    ) if add_batch_indices else (coords[:, 0] * 2**32 + coords[:, 1] * 2**16 + coords[:, 2])
+    # -------- 唯一键：batch 维放最高位，保证不同 batch 不混淆 --------
+    if add_batch_indices:
+        coords_hash = (
+            coords[:, 0].to(torch.int64) << 48 |
+            coords[:, 1].to(torch.int64) << 32 |
+            coords[:, 2].to(torch.int64) << 16 |
+            coords[:, 3].to(torch.int64)
+        )
+    else:
+        coords_hash = (
+            coords[:, 0].to(torch.int64) << 32 |
+            coords[:, 1].to(torch.int64) << 16 |
+            coords[:, 2].to(torch.int64)
+        )
+        
     uniq, inv = coords_hash.unique(return_inverse=True)
     feats_agg = torch.zeros(
         (uniq.numel(), feats.size(1)), dtype=feats.dtype, device=feats.device
@@ -132,15 +143,20 @@ def tokens_to_sparse_voxel(
 # Optional helper : convert to MinkowskiEngine Tensor
 # --------------------------------------------------------------------------- #
 def to_me_tensor(
-    coords: torch.Tensor, feats: torch.Tensor
+    coords: torch.Tensor,
+    feats: torch.Tensor,
+    spatial_shape: list[int] | None = None
 ) -> "ME.SparseTensor":  # type: ignore
     """
-    简易包装：若环境已安装 MinkowskiEngine，则将 (coords, feats) 转成
-    `ME.SparseTensor`，否则抛错提示。
+    Wrap (coords, feats) to MinkowskiEngine SparseTensor.
+    coords : int32 [N,4]  (batch,x,y,z)
+    feats  : float32 [N,C]
     """
-    if not _ME_AVAILABLE:  # pragma: no cover
-        raise ModuleNotFoundError(
-            "MinkowskiEngine is not installed. Please `pip install -U MinkowskiEngine` "
-            "or手动将 coords, feats 输入您的 SparseUNet."
-        )
-    return ME.SparseTensor(features=feats, coordinates=coords)
+    if spatial_shape is None:
+        return ME.SparseTensor(feats, coords)          # 原有做法
+    else:
+        cm = ME.CoordinateManager(device=coords.device)
+        cm.initialize(coords, tensor_stride=1,
+                      spatial_size=spatial_shape)
+        return ME.SparseTensor(feats, coords,
+                               coordinate_manager=cm)
