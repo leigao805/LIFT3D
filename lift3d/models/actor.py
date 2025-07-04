@@ -237,8 +237,12 @@ class TokenVoxelGraspActor(Actor):
         D, H, W = grid_size.tolist()
 
         # （B,K,3）→ 量化到整数体素索引，超界 clip 回边界
-        idx = ((patch_xyz - range_min) / self.voxel_size).long()
-        idx = idx.clamp(min=0, max=grid_size.unsqueeze(0) - 1)                 # [0, D‑1]…
+        idx = ((patch_xyz - range_min) / self.voxel_size).long()               # (B,K,3)
+
+        # -------- clamp 每个维度到 [0, size‑1] --------
+        idx = idx.clamp(min=0)                                                 # 下界
+        max_idx = (grid_size - 1).view(1, 1, 3)                                # (1,1,3)
+        idx = torch.minimum(idx, max_idx)                                      # 上界
 
         batch_ids = torch.repeat_interleave(
             torch.arange(point_clouds.size(0), device=patch_xyz.device),
