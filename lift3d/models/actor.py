@@ -233,9 +233,8 @@ class TokenVoxelGraspActor(Actor):
         range_min = torch.tensor(self.pc_range[:3], device=patch_xyz.device)   # (3,)
         range_max = torch.tensor(self.pc_range[3:], device=patch_xyz.device)   # (3,)
 
-        grid_size = ((range_max - range_min) / self.voxel_size).long()         # (3,) = [D,H,W]
-        D, H, W = grid_size.tolist()
-
+        grid_size = ((range_max - range_min) / self.voxel_size).long()          # (3,)
+        
         # （B,K,3）→ 量化到整数体素索引，超界 clip 回边界
         idx = ((patch_xyz - range_min) / self.voxel_size).long()               # (B,K,3)
 
@@ -258,7 +257,7 @@ class TokenVoxelGraspActor(Actor):
         feats = torch.cat([feats, rs_broadcast], dim=1)                             # (N_total,1536)
 
         # 4. sparse UNet → heatmap
-        me_tensor = to_me_tensor(coords, feats, spatial_shape=grid_size.tolist())
+        me_tensor = to_me_tensor(coords, feats)    # 交给 ME 自行推断网格大小
         heat_out  = self.sparse_unet(me_tensor).dense()
 
         # 如果 UNet 返回 (tensor, extra) 形式，取第一个分量
@@ -306,7 +305,7 @@ class TokenVoxelGraspActor(Actor):
 
             # —— 供 loss.pose_to_heatmap() 使用的几项
             "xyz_min":     xyz_min_world,  # (B,3) 世界坐标系下的局部体素原点
-            "grid_size":   grid_size.to(heat_dense.device),
+            "grid_size":   torch.tensor([D, H, W], device=heat_dense.device),
             "voxel_size":  torch.tensor(self.voxel_size,
                                         device=heat_dense.device),   # (1,) NEW
         }

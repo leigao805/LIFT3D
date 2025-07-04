@@ -152,12 +152,6 @@ def to_me_tensor(
     coords : int32 [N,4]  (batch,x,y,z)
     feats  : float32 [N,C]
     """
-    if spatial_shape is None:
-        return ME.SparseTensor(feats, coords)          # 原有做法
-    else:
-        # D = 3  表示 3‑D 稀疏体素；device 放到 initialize 里即可
-        cm = ME.CoordinateManager(D=3)
-        cm.initialize(coords,
-                      tensor_stride=1,
-                      spatial_size=spatial_shape,
-                      device=coords.device)
+    # 统一走最稳妥路径：让 MinkowskiEngine 自己创建 / 管理 CoordinateManager
+    # 0.5.x 版本会自动推断 spatial shape，无需手动指定。
+    return ME.SparseTensor(feats, coords)
