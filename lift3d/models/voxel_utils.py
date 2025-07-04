@@ -123,7 +123,7 @@ def tokens_to_sparse_voxel(
             coords[:, 1].to(torch.int64) << 16 |
             coords[:, 2].to(torch.int64)
         )
-        
+
     uniq, inv = coords_hash.unique(return_inverse=True)
     feats_agg = torch.zeros(
         (uniq.numel(), feats.size(1)), dtype=feats.dtype, device=feats.device
@@ -155,8 +155,9 @@ def to_me_tensor(
     if spatial_shape is None:
         return ME.SparseTensor(feats, coords)          # 原有做法
     else:
-        cm = ME.CoordinateManager(device=coords.device)
+        cm = ME.CoordinateManager()                 # ← 删掉 device=...
         cm.initialize(coords, tensor_stride=1,
-                      spatial_size=spatial_shape)
+                      spatial_size=spatial_shape,
+                      device=coords.device)         # 必须显式传入 device
         return ME.SparseTensor(feats, coords,
                                coordinate_manager=cm)
