@@ -170,7 +170,7 @@ class TokenVoxelGraspActor(Actor):
         robot_state_dropout_rate: float = 0.10,
         voxel_size: float = 0.01,
         pc_range: Tuple[float, float, float, float, float, float] = (
-            -0.3, -0.5, 0.0, 0.7, 0.5, 1.0
+            -0.3, -0.5, 0.6, 0.7, 0.5, 1.6
         ),
         k_nearest: int = 4,
         sparse_unet_cfg: Dict | None = None,
