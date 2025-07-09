@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """
 将 Lift3dCLIP 输出的 patch‑token (xyz, feat) 体素化，生成稀疏坐标 + 特征，
-供 Sparse 3D 网络（MinkowskiEngine / spconv / 自定义 Sparse UNet）使用。
+供 Sparse 3D 网络（MinkowskiEngine / spconv / 自定义 Sparse UNet）使用。
 
 Typical usage
 -------------
@@ -56,6 +56,7 @@ def tokens_to_sparse_voxel(
     *,
     voxel_size: float = 0.01,
     pc_range: Optional[List[float]] = None,
+    origin_shift: Optional[torch.Tensor] = None,
     add_batch_indices: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
@@ -68,7 +69,7 @@ def tokens_to_sparse_voxel(
     tokens_feat : (B,K,C)
         patch‑token 特征；梯度将沿着归一化平均传播。
     voxel_size : float
-        体素边长（米）。建议与抓取热图输出分辨率一致，如 1 cm。
+        体素边长（米）。建议与抓取热图输出分辨率一致，如 1 cm。
     pc_range : [xmin, ymin, zmin, xmax, ymax, zmax]
         点云范围 (米)。若为 None，则自动按 xyz 最小/最大值向下/上取整 1 voxel。
     add_batch_indices : bool
@@ -81,6 +82,12 @@ def tokens_to_sparse_voxel(
     feats  : torch.FloatTensor (N, C)
     """
     B, K, _ = tokens_xyz.shape
+
+    # ---- ① 可选：先整体平移坐标系 ----
+    if origin_shift is not None:
+        # origin_shift shape 必须为 (3,)，且与 tokens_xyz 同 dtype / device
+        tokens_xyz = tokens_xyz - origin_shift.to(tokens_xyz.device)[None, None, :]
+
     if pc_range is None:
         xyz_min = tokens_xyz.amin(dim=(0, 1))
         xyz_max = tokens_xyz.amax(dim=(0, 1))

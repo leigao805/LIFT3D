@@ -170,7 +170,7 @@ class TokenVoxelGraspActor(Actor):
         robot_state_dropout_rate: float = 0.10,
         voxel_size: float = 0.01,
         pc_range: Tuple[float, float, float, float, float, float] = (
-            -0.5, -0.5, -0.1, 0.5, 0.5, 0.4
+            -0.3, -0.5, 0.0, 0.7, 0.5, 1.0
         ),
         k_nearest: int = 4,
         sparse_unet_cfg: Dict | None = None,
@@ -227,30 +227,19 @@ class TokenVoxelGraspActor(Actor):
             point_clouds, return_tokens=True, return_xyz=True
         )  # (B,768) (B,K,768) (B,K,3)
 
+        # 2. tokens → sparse voxels（用 helpers.voxel_utils 封装的通用函数）
         # ------------------------------------------------------------------
-        # 2. tokens → sparse voxels  （**固定全局网格**）
-        # ------------------------------------------------------------------
-        range_min = torch.tensor(self.pc_range[:3], device=patch_xyz.device)   # (3,)
-        range_max = torch.tensor(self.pc_range[3:], device=patch_xyz.device)   # (3,)
+        #   ① 先“粗”体素化：得到稀疏坐标 & token 特征平均。
+        shift = torch.tensor([0.0, 0.0, 0.6], device=patch_xyz.device)  # 例：把 z 轴整体减 0.6
+        coords, feats = tokens_to_sparse_voxel(
+            tokens_xyz=patch_xyz,           # (B, K, 3)
+            tokens_feat=patch_tok,          # (B, K, 768)
+            voxel_size=self.voxel_size,
+            pc_range=self.pc_range,
+            origin_shift=shift,             # ← 真正把平移量用上
+            add_batch_indices=True,
+        )                                   # → coords (N,4), feats (N,768)
 
-        grid_size = ((range_max - range_min) / self.voxel_size).long()          # (3,)
-        
-        # （B,K,3）→ 量化到整数体素索引，超界 clip 回边界
-        idx = ((patch_xyz - range_min) / self.voxel_size).long()               # (B,K,3)
-
-        # -------- clamp 每个维度到 [0, size‑1] --------
-        idx = idx.clamp(min=0)                                                 # 下界
-        max_idx = (grid_size - 1).view(1, 1, 3)                                # (1,1,3)
-        idx = torch.minimum(idx, max_idx)                                      # 上界
-
-        batch_ids = torch.repeat_interleave(
-            torch.arange(point_clouds.size(0), device=patch_xyz.device),
-            repeats=idx.size(1)
-        )
-        coords = torch.cat([batch_ids.unsqueeze(1), idx.view(-1, 3)], dim=1).int()   # (N,4)
-
-        feats = patch_tok.reshape(-1, patch_tok.size(-1))                      # (N,768)
-        
         # 3. robot state → embed & broadcast → concat
         rs_emb = self.robot_state_dropout(self.robot_state_encoder(robot_states))  # (B,768)
         rs_broadcast = rs_emb[coords[:, 0].long()]                                  # (N_total,768)
@@ -273,8 +262,9 @@ class TokenVoxelGraspActor(Actor):
         y = ((flat_idx % (H * W)) // W).int()
         x = (flat_idx % W).int()
         voxel_idx = torch.stack([x, y, z], dim=1).float()          # (B,3)
-        voxel_centers = range_min + (voxel_idx + 0.5) * self.voxel_size         # (B,3)
-
+        local_min = torch.tensor(self.pc_range[:3], device=heat_dense.device)      # (-0.3,-0.5,0)
+        voxel_centers = local_min + (voxel_idx + 0.5) * self.voxel_size + shift    # (B,3)
+        
         # 6. aggregate k‑NN patch tokens
         dist = torch.cdist(voxel_centers.unsqueeze(1), patch_xyz)                   # (B,1,K)
         idx = dist.topk(self.k_nearest, largest=False).indices                      # (B,1,k)
@@ -293,8 +283,8 @@ class TokenVoxelGraspActor(Actor):
         # ☆ 把体素化过程的关键信息一并带回，以便 loss 能反推 heat‑GT
         # ----------------------------------------------------------
 
-        xyz_min_world = range_min.unsqueeze(0).expand(point_clouds.size(0), 3)  # (B,3)
-
+        xyz_min_world = (local_min + shift).unsqueeze(0).expand(point_clouds.size(0), 3)
+        
         output = {
             "heatmap":     heat_dense,                          # (B,1,D,H,W)
             "quat":        quat_pred,                           # (B,4)
