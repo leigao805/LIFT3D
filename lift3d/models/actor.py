@@ -238,6 +238,7 @@ class TokenVoxelGraspActor(Actor):
             pc_range=self.pc_range,
             origin_shift=shift,             # ← 真正把平移量用上
             add_batch_indices=True,
+            return_offset=True,        # ← 必须显式打开！
         )                                   # → coords (N,4), feats (N,768)
 
         # 3. robot state → embed & broadcast → concat
@@ -300,7 +301,7 @@ class TokenVoxelGraspActor(Actor):
         xyz_min_world = (
             local_min + shift + coord_offset.float() * self.voxel_size
         ).unsqueeze(0).expand(point_clouds.size(0), 3)
-        
+
         output = {
             "heatmap":     heat_dense,                          # (B,1,D,H,W)
             "quat":        quat_pred,                           # (B,4)
