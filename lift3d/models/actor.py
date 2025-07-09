@@ -231,7 +231,7 @@ class TokenVoxelGraspActor(Actor):
         # ------------------------------------------------------------------
         #   ① 先“粗”体素化：得到稀疏坐标 & token 特征平均。
         shift = torch.tensor([0.0, 0.0, 0.6], device=patch_xyz.device)  # 例：把 z 轴整体减 0.6
-        coords, feats = tokens_to_sparse_voxel(
+        coords, feats, coord_offset = tokens_to_sparse_voxel(
             tokens_xyz=patch_xyz,           # (B, K, 3)
             tokens_feat=patch_tok,          # (B, K, 768)
             voxel_size=self.voxel_size,
@@ -246,7 +246,12 @@ class TokenVoxelGraspActor(Actor):
         feats = torch.cat([feats, rs_broadcast], dim=1)                             # (N_total,1536)
 
         # 4. sparse UNet → heatmap
-        me_tensor = to_me_tensor(coords, feats)    # 交给 ME 自行推断网格大小
+        # ► 送入 ME 之前必须保证 xyz ≥0
+        coords_me = coords.clone()
+        if (coord_offset != 0).any():              # (3,)
+            coords_me[:, 1:] -= coord_offset       # 只改 xyz
+
+        me_tensor = to_me_tensor(coords_me, feats)
         heat_out  = self.sparse_unet(me_tensor).dense()
 
         # 如果 UNet 返回 (tensor, extra) 形式，取第一个分量
@@ -261,10 +266,19 @@ class TokenVoxelGraspActor(Actor):
         z = (flat_idx // (H * W)).int()
         y = ((flat_idx % (H * W)) // W).int()
         x = (flat_idx % W).int()
-        voxel_idx = torch.stack([x, y, z], dim=1).float()          # (B,3)
-        local_min = torch.tensor(self.pc_range[:3], device=heat_dense.device)      # (-0.3,-0.5,0)
-        voxel_centers = local_min + (voxel_idx + 0.5) * self.voxel_size + shift    # (B,3)
-        
+        voxel_idx = torch.stack([x, y, z], dim=1).float()        # (B,3)  在局部网格坐标系
+
+        # ► 还原到世界坐标：先加回 offset，再加上 pc_range.min 与 shift
+        local_min = torch.tensor(self.pc_range[:3],
+                                 device=heat_dense.device)       # (-0.3,-0.5,0)
+        voxel_centers = (
+            local_min                                     +
+            (voxel_idx + 0.5) * self.voxel_size           +
+            shift                                         +
+            coord_offset.float() * self.voxel_size        # <‑‑ NEW
+        )
+
+
         # 6. aggregate k‑NN patch tokens
         dist = torch.cdist(voxel_centers.unsqueeze(1), patch_xyz)                   # (B,1,K)
         idx = dist.topk(self.k_nearest, largest=False).indices                      # (B,1,k)
@@ -283,7 +297,9 @@ class TokenVoxelGraspActor(Actor):
         # ☆ 把体素化过程的关键信息一并带回，以便 loss 能反推 heat‑GT
         # ----------------------------------------------------------
 
-        xyz_min_world = (local_min + shift).unsqueeze(0).expand(point_clouds.size(0), 3)
+        xyz_min_world = (
+            local_min + shift + coord_offset.float() * self.voxel_size
+        ).unsqueeze(0).expand(point_clouds.size(0), 3)
         
         output = {
             "heatmap":     heat_dense,                          # (B,1,D,H,W)

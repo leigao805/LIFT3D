@@ -58,6 +58,7 @@ def tokens_to_sparse_voxel(
     pc_range: Optional[List[float]] = None,
     origin_shift: Optional[torch.Tensor] = None,
     add_batch_indices: bool = True,
+    return_offset: bool = False,       # <‑‑ NEW
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     体素化函数 —— 将 patch‑token 映射到稀疏体素坐标。
@@ -142,8 +143,24 @@ def tokens_to_sparse_voxel(
     coords_out = coords.new_empty((uniq.numel(), coords.size(1)))
     coords_out[inv] = coords                                      # 重排回唯一顺序
     coords_out = coords_out.unique(dim=0)
+    
+    # ------------------------------------------------------------
+    # ⑤   把 xyz 坐标整体平移到 >=0 ，防止 ME.dense() 报错
+    #     (仅平移 x,y,z 三列；batch 列不动)
+    # ------------------------------------------------------------
+    if add_batch_indices:
+        xyz_part = coords_out[:, 1:]                # (N,3)
+    else:                                           # (N,3) 直接就是 xyz
+        xyz_part = coords_out
 
-    return coords_out.int(), feats_agg
+    coord_offset = xyz_part.min(dim=0).values       # (3,)  ≤ 0
+    if (coord_offset < 0).any():
+        xyz_part.sub_(coord_offset)                 # 原地 ‑‑> 保证非负
+
+    if return_offset:
+        return coords_out.int(), feats_agg, coord_offset.int()
+    else:
+        return coords_out.int(), feats_agg
 
 
 # --------------------------------------------------------------------------- #
